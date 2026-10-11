@@ -60,6 +60,20 @@ test('parseWeight accepts decimals with "." and ","', () => {
   assert(Number.isNaN(L.parseWeight('2.5.5')), 'two dots are invalid');
 });
 
+test('bodyweight sets: "BW" instead of a weight', () => {
+  assertEqual(L.parseWeight('BW'), 'BW');
+  assertEqual(L.parseWeight('bw'), 'BW');
+  assert(Number.isNaN(L.parseWeight('BW5')), 'BW with a number is invalid');
+  assertEqual(L.formatWeight('BW'), 'BW');
+  assertEqual(L.formatSet({ weight: 'BW', reps: 10 }), 'BW × 10');
+
+  const s = L.newSession(NOW);
+  L.addSet(s, 'Pull-ups', { weight: L.parseWeight('BW'), reps: 10, rest: 90 });
+  const saved = L.prepareForSave(s, NOW + 1000);
+  assertEqual(saved.exercises[0].sets[0], { weight: 'BW', reps: 10, rest: 90 }, 'saved as BW');
+  assertEqual(L.parseBackup(L.buildBackup([saved], NOW))[0].exercises[0].sets[0].weight, 'BW', 'survives export/import');
+});
+
 test('parseReps accepts whole numbers of at least 1', () => {
   assertEqual(L.parseReps('8'), 8);
   assertEqual(L.parseReps(''), null);

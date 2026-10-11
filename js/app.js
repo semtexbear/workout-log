@@ -160,6 +160,14 @@ function wireEvents() {
   });
   $('#f-name').addEventListener('input', syncTargetToName);
   $('#f-target').addEventListener('input', () => { targetIsAuto = false; });
+  // The number pad has no "–" key, so "," or "." in a target field becomes "–" as you type.
+  for (const input of [$('#f-target'), $('#d-target')]) {
+    input.addEventListener('input', () => dashify(input));
+  }
+  // In the weight fields, ",," (or "..") becomes "BW" for bodyweight.
+  for (const input of [$('#f-weight'), $('#d-weight')]) {
+    input.addEventListener('input', () => bodyweightShortcut(input));
+  }
   for (const chip of document.querySelectorAll('[data-rest]')) {
     chip.addEventListener('click', () => {
       $('#f-rest').value = L.formatRest(Number(chip.dataset.rest));
@@ -236,6 +244,24 @@ function readForm() {
 
 function fillForm(values = {}) {
   for (const field of Object.keys(form)) form[field]().value = values[field] ?? '';
+}
+
+/** Turns "8,12" or "8.12" into "8–12" in a text field, keeping the cursor in place. */
+function dashify(input) {
+  const fixed = input.value.replace(/[.,]/g, '–');
+  if (fixed === input.value) return;
+  const cursor = input.selectionStart;
+  input.value = fixed;
+  input.setSelectionRange(cursor, cursor);
+}
+
+/**
+ * Typing the decimal key twice (",," or "..") in a weight field turns it into
+ * "BW" (bodyweight). Deleting a letter of "BW" empties the field again.
+ */
+function bodyweightShortcut(input) {
+  if (/[.,]{2}/.test(input.value)) input.value = L.BODYWEIGHT;
+  else if (/^[bw]$/i.test(input.value)) input.value = '';
 }
 
 /**
@@ -399,7 +425,7 @@ function prepareNextSet(exIndex) {
  * An empty weight counts as 0 kg (bodyweight exercises).
  */
 function validateSet({ weight, reps, rest }) {
-  if (Number.isNaN(weight)) return 'Weight must be a number, e.g. 22.5';
+  if (Number.isNaN(weight)) return 'Weight must be a number, e.g. 22.5 (or ,, for BW)';
   if (reps === null) return 'Please enter the number of reps.';
   if (Number.isNaN(reps)) return 'Reps must be a whole number, e.g. 8';
   if (Number.isNaN(rest)) return 'Rest: seconds (90) or minutes.seconds (1.30)';
@@ -408,7 +434,7 @@ function validateSet({ weight, reps, rest }) {
 
 /** Checks a parsed target rep range. Returns an error message, or ''. */
 function validateTarget(target) {
-  return Number.isNaN(target) ? 'Target reps: e.g. 8.12 for 8–12, or just 5' : '';
+  return Number.isNaN(target) ? 'Target reps: a range like 8–12, or just 5' : '';
 }
 
 function parseSetFields(weightText, repsText, restText) {

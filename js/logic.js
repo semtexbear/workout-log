@@ -9,7 +9,7 @@
  *
  *   Session  = { id, startedAt, finishedAt?, exercises: Exercise[] }
  *   Exercise = { name, target?, note?, sets: Set[] }   // target = { min, max } reps
- *   Set      = { weight, reps, rest }   // kg, count, seconds (rest may be null)
+ *   Set      = { weight, reps, rest }   // kg (or "BW"), count, seconds (rest may be null)
  *
  * Timestamps (startedAt, finishedAt) are milliseconds since 1970 (Date.now()).
  */
@@ -99,10 +99,17 @@ export function formatDuration(ms) {
 /*   NaN       – the input is not valid                                */
 /* ------------------------------------------------------------------ */
 
-/** Weight in kg. Decimals allowed with "." or "," (e.g. "22.5", "22,5"). */
+/** The weight value of a bodyweight set (no added weight), shown as "BW". */
+export const BODYWEIGHT = 'BW';
+
+/**
+ * Weight in kg. Decimals allowed with "." or "," (e.g. "22.5", "22,5").
+ * "BW" (any case) means bodyweight and returns BODYWEIGHT.
+ */
 export function parseWeight(text) {
   const t = String(text ?? '').trim().replace(',', '.');
   if (t === '') return null;
+  if (t.toUpperCase() === BODYWEIGHT) return BODYWEIGHT;
   if (!/^(\d+(\.\d*)?|\.\d+)$/.test(t)) return NaN;
   return Number(t);
 }
@@ -155,8 +162,9 @@ export function formatTarget(target) {
   return target.min === target.max ? `${target.min}` : `${target.min}–${target.max}`;
 }
 
-/** 22.5 → "22.5", 20 → "20" */
+/** 22.5 → "22.5", 20 → "20", "BW" → "BW" */
 export function formatWeight(kg) {
+  if (kg === BODYWEIGHT) return BODYWEIGHT;
   return String(Math.round(Number(kg) * 100) / 100);
 }
 
@@ -168,8 +176,9 @@ export function formatRest(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** { weight: 22.5, reps: 8 } → "22.5 kg × 8" */
+/** { weight: 22.5, reps: 8 } → "22.5 kg × 8", { weight: "BW", reps: 10 } → "BW × 10" */
 export function formatSet(set) {
+  if (set.weight === BODYWEIGHT) return `${BODYWEIGHT} × ${set.reps}`;
   return `${formatWeight(set.weight)} kg × ${set.reps}`;
 }
 

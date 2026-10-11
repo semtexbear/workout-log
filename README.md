@@ -32,7 +32,7 @@ add to your Home Screen, where it opens full-screen like a normal app.
   one also fills in the weight, reps and rest from the last time you did it.
 - **Rest:** type seconds (`90`) or minutes.seconds (`1.30` = 1 min 30 s; the
   number pad has no `:` key). You can also tap one of the quick buttons (1:00, 1:30…).
-- An empty weight counts as 0 kg (for bodyweight exercises).
+- Bodyweight exercises: type `,,` in Weight and it turns into **BW**. (An empty weight counts as 0 kg.)
 - Tap a set to change or delete it. Tap **Edit** next to an exercise to rename or delete it.
 - Everything is saved as you type. If the app gets closed mid-workout, it continues
   where you left off.
