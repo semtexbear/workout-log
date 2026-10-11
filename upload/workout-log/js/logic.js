@@ -8,7 +8,7 @@
  * Data shapes used throughout the app:
  *
  *   Session  = { id, startedAt, finishedAt?, exercises: Exercise[] }
- *   Exercise = { name, sets: Set[] }
+ *   Exercise = { name, target?, note?, sets: Set[] }   // target = { min, max } reps
  *   Set      = { weight, reps, rest }   // kg, count, seconds (rest may be null)
  *
  * Timestamps (startedAt, finishedAt) are milliseconds since 1970 (Date.now()).
@@ -129,9 +129,31 @@ export function parseRest(text) {
   return NaN;
 }
 
+/**
+ * Target rep range. "8-12", "8–12", "8 12" and (because the number pad has
+ * no dash) "8.12" or "8,12" all mean 8 to 12; a single number like "5" also
+ * works. Returns { min, max }, null when empty, or NaN when invalid.
+ */
+export function parseTarget(text) {
+  const t = String(text ?? '').trim();
+  if (t === '') return null;
+  const m = t.match(/^(\d+)(?:\s*[-–—.,\s]\s*(\d+))?$/);
+  if (!m) return NaN;
+  const min = Number(m[1]);
+  const max = m[2] === undefined ? min : Number(m[2]);
+  if (min < 1 || max < min) return NaN;
+  return { min, max };
+}
+
 /* ------------------------------------------------------------------ */
 /* Formatting numbers for display                                      */
 /* ------------------------------------------------------------------ */
+
+/** { min: 8, max: 12 } → "8–12", { min: 5, max: 5 } → "5", null → "" */
+export function formatTarget(target) {
+  if (!target) return '';
+  return target.min === target.max ? `${target.min}` : `${target.min}–${target.max}`;
+}
 
 /** 22.5 → "22.5", 20 → "20" */
 export function formatWeight(kg) {
@@ -174,18 +196,47 @@ export function cleanName(name) {
  * Adds a set to the session. If an exercise with the same name (ignoring
  * upper/lower case) already exists, the set is added to it; otherwise a new
  * exercise is created. Changes `session` in place.
+ *
+ * `details` may hold the exercise's target rep range and note; they are only
+ * saved when filled in (an empty field never wipes an existing note).
+ *
+ * The exercise is also marked as the most recently used one, so it is shown
+ * at the top of the list (see exercisesNewestFirst). Its position in
+ * session.exercises doesn't change: that stays the order they were started in.
+ *
  * Returns the position of the new set: { exIndex, setIndex }.
  */
-export function addSet(session, name, set) {
+export function addSet(session, name, set, details = {}) {
   const key = normalizeName(name);
   let exIndex = session.exercises.findIndex((ex) => normalizeName(ex.name) === key);
   if (exIndex === -1) {
     session.exercises.push({ name: cleanName(name), sets: [] });
     exIndex = session.exercises.length - 1;
   }
-  const sets = session.exercises[exIndex].sets;
-  sets.push({ weight: set.weight, reps: set.reps, rest: set.rest ?? null });
-  return { exIndex, setIndex: sets.length - 1 };
+  const ex = session.exercises[exIndex];
+  if (details.target) ex.target = details.target;
+  if (details.note?.trim()) ex.note = details.note.trim();
+  ex.lastActive = 1 + Math.max(0, ...session.exercises.map((e) => e.lastActive ?? 0));
+  ex.sets.push({ weight: set.weight, reps: set.reps, rest: set.rest ?? null });
+  return { exIndex, setIndex: ex.sets.length - 1 };
+}
+
+/**
+ * The session's exercises for display during the workout: the one worked on
+ * most recently first. Returns [{ ex, exIndex }] (exIndex = real position).
+ */
+export function exercisesNewestFirst(session) {
+  return session.exercises
+    .map((ex, exIndex) => ({ ex, exIndex }))
+    .sort((a, b) => (b.ex.lastActive ?? b.exIndex) - (a.ex.lastActive ?? a.exIndex));
+}
+
+/** Changes an exercise's name, target rep range and note. Changes `session` in place. */
+export function updateExercise(session, exIndex, { name, target, note }) {
+  const ex = session.exercises[exIndex];
+  ex.name = cleanName(name);
+  if (target) ex.target = target; else delete ex.target;
+  if (note?.trim()) ex.note = note.trim(); else delete ex.note;
 }
 
 /** Replaces one set. Changes `session` in place. */
@@ -230,12 +281,18 @@ export function summarize(session) {
 /**
  * Turns the in-progress session into the record that gets saved: removes
  * empty exercises, drops the half-typed form and stamps the finish time.
+ * Exercises stay in the order they were done (first one first).
  * Returns null if there is nothing worth saving (no sets at all).
  */
 export function prepareForSave(draft, now) {
   const exercises = draft.exercises
     .filter((ex) => ex.sets.length > 0)
-    .map((ex) => ({ name: ex.name, sets: ex.sets.map((s) => ({ ...s })) }));
+    .map((ex) => ({
+      name: ex.name,
+      ...(ex.target && { target: { ...ex.target } }),
+      ...(ex.note && { note: ex.note }),
+      sets: ex.sets.map((s) => ({ ...s })),
+    }));
   if (exercises.length === 0) return null;
   return { id: draft.id, startedAt: draft.startedAt, finishedAt: now, exercises };
 }
@@ -246,9 +303,9 @@ export function prepareForSave(draft, now) {
 
 /**
  * Collects every exercise used in `sessions`, with the most recent time it
- * was done and its last set (to pre-fill the form).
- * Returns [{ name, key, lastUsed, position, lastSet }], most recently used
- * first. Within one session, exercises done later count as more recent.
+ * was done, its last set and its target rep range (to pre-fill the form).
+ * Returns [{ name, key, lastUsed, position, lastSet, target }], most recently
+ * used first. Within one session, exercises done later count as more recent.
  */
 export function buildExerciseIndex(sessions) {
   const byKey = new Map();
@@ -258,7 +315,8 @@ export function buildExerciseIndex(sessions) {
       const known = byKey.get(key);
       if (ex.sets.length && (!known || session.startedAt > known.lastUsed)) {
         byKey.set(key, {
-          name: ex.name, key, lastUsed: session.startedAt, position, lastSet: ex.sets[ex.sets.length - 1],
+          name: ex.name, key, lastUsed: session.startedAt, position,
+          lastSet: ex.sets[ex.sets.length - 1], target: ex.target ?? null,
         });
       }
     });

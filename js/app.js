@@ -154,10 +154,12 @@ function wireEvents() {
   $('#entry-form').addEventListener('submit', (e) => { e.preventDefault(); addSetFromForm(); });
   $('#entry-form').addEventListener('input', onFormInput);
   $('#f-name').addEventListener('focus', renderSuggestions);
-  // The keyboard's "next" key on the name field jumps to Weight instead of adding the set.
+  // The keyboard's "next" key on the name field jumps to Target reps instead of adding the set.
   $('#f-name').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); form.weight().focus(); }
+    if (e.key === 'Enter') { e.preventDefault(); form.target().focus(); }
   });
+  $('#f-name').addEventListener('input', syncTargetToName);
+  $('#f-target').addEventListener('input', () => { targetIsAuto = false; });
   for (const chip of document.querySelectorAll('[data-rest]')) {
     chip.addEventListener('click', () => {
       $('#f-rest').value = L.formatRest(Number(chip.dataset.rest));
@@ -213,26 +215,44 @@ async function startOrResumeSession() {
 
 const form = {
   name: () => $('#f-name'),
+  target: () => $('#f-target'),
   weight: () => $('#f-weight'),
   reps: () => $('#f-reps'),
   rest: () => $('#f-rest'),
+  note: () => $('#f-note'),
 };
 
-/** Reads the four entry fields as plain text. */
+/** Reads the entry fields as plain text. */
 function readForm() {
   return {
     name: form.name().value,
+    target: form.target().value,
     weight: form.weight().value,
     reps: form.reps().value,
     rest: form.rest().value,
+    note: form.note().value,
   };
 }
 
 function fillForm(values = {}) {
-  form.name().value = values.name ?? '';
-  form.weight().value = values.weight ?? '';
-  form.reps().value = values.reps ?? '';
-  form.rest().value = values.rest ?? '';
+  for (const field of Object.keys(form)) form[field]().value = values[field] ?? '';
+}
+
+/**
+ * True while the Target reps field holds a value the app filled in (or is
+ * empty), false once the user has typed a target themselves.
+ */
+let targetIsAuto = true;
+
+/**
+ * When the exercise name changes, show that exercise's target (from this
+ * session or last time), so a target never sticks to the wrong exercise.
+ * A target the user typed themselves is left alone.
+ */
+function syncTargetToName() {
+  if (!targetIsAuto && form.target().value.trim()) return;
+  form.target().value = L.formatTarget(lastTargetFor(form.name().value));
+  targetIsAuto = true;
 }
 
 /** Puts a saved set's values into the weight/reps/rest fields. */
@@ -260,14 +280,15 @@ function renderExerciseList(highlight = null) {
     return;
   }
 
-  state.draft.exercises.forEach((ex, exIndex) => {
+  // The exercise worked on most recently is shown first.
+  for (const { ex, exIndex } of L.exercisesNewestFirst(state.draft)) {
     list.append(exerciseCard(ex, {
       onEditExercise: () => openExerciseDialog(exIndex),
       onEditSet: (setIndex) => openSetDialog(exIndex, setIndex),
       onAddMore: () => prepareNextSet(exIndex),
       highlightSet: highlight?.exIndex === exIndex ? highlight.setIndex : null,
     }));
-  });
+  }
 
   // Make the new set visible and briefly highlight it.
   list.querySelector('.flash')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -295,8 +316,11 @@ function exerciseCard(ex, { onEditExercise, onEditSet, onAddMore, highlightSet =
 
   return el('article', { class: 'card exercise' },
     el('header', { class: 'exercise-head' },
-      el('h3', {}, ex.name),
+      el('div', { class: 'exercise-title' },
+        el('h3', {}, ex.name),
+        ex.target && el('span', { class: 'target' }, `Target ${L.formatTarget(ex.target)}`)),
       editable && el('button', { class: 'small-btn', type: 'button', onclick: onEditExercise }, 'Edit')),
+    ex.note && el('p', { class: 'exercise-note' }, ex.note),
     el('ol', { class: 'sets' }, rows),
     editable && el('button', { class: 'add-more', type: 'button', onclick: onAddMore }, '+ Add another set'),
   );
@@ -342,9 +366,20 @@ function lastSetFor(name) {
   return state.exercises.find((ex) => ex.key === key)?.lastSet ?? null;
 }
 
-/** A suggestion was tapped: fill in the name and the last used numbers. */
+/** An exercise's target rep range: from this session, else from last time. */
+function lastTargetFor(name) {
+  const key = L.normalizeName(name);
+  if (!key) return null;
+  const current = state.draft?.exercises.find((ex) => L.normalizeName(ex.name) === key);
+  if (current?.target) return current.target;
+  return state.exercises.find((ex) => ex.key === key)?.target ?? null;
+}
+
+/** A suggestion was tapped: fill in the name, its target and the last used numbers. */
 function pickExercise(name) {
   form.name().value = name;
+  form.target().value = L.formatTarget(lastTargetFor(name));
+  targetIsAuto = true;
   const last = lastSetFor(name);
   if (last) fillFormFromSet(last);
   onFormInput();
@@ -371,6 +406,11 @@ function validateSet({ weight, reps, rest }) {
   return '';
 }
 
+/** Checks a parsed target rep range. Returns an error message, or ''. */
+function validateTarget(target) {
+  return Number.isNaN(target) ? 'Target reps: e.g. 8.12 for 8–12, or just 5' : '';
+}
+
 function parseSetFields(weightText, repsText, restText) {
   return {
     weight: L.parseWeight(weightText),
@@ -384,11 +424,16 @@ function addSetFromForm() {
   if (!name) return showEntryError('Please enter an exercise name.');
 
   const set = parseSetFields(form.weight().value, form.reps().value, form.rest().value);
-  const error = validateSet(set);
+  const target = L.parseTarget(form.target().value);
+  const error = validateSet(set) || validateTarget(target);
   if (error) return showEntryError(error);
 
-  const position = L.addSet(state.draft, name, { ...set, weight: set.weight ?? 0 });
-  // Keep the values in the form: the next set is usually the same.
+  const position = L.addSet(state.draft, name, { ...set, weight: set.weight ?? 0 },
+    { target, note: form.note().value });
+  // Keep the numbers in the form (the next set is usually the same). The note
+  // is now shown on the exercise card, so the field is emptied.
+  form.note().value = '';
+  targetIsAuto = true;
   state.draft.form = readForm();
   saveDraftNow();
 
@@ -508,18 +553,23 @@ function deleteSetDialog() {
 
 function openExerciseDialog(exIndex) {
   editing = { exIndex };
-  $('#d-name').value = state.draft.exercises[exIndex].name;
+  const ex = state.draft.exercises[exIndex];
+  $('#d-name').value = ex.name;
+  $('#d-target').value = L.formatTarget(ex.target);
+  $('#d-note').value = ex.note ?? '';
   $('#exercise-dialog-error').textContent = '';
   $('#exercise-dialog').showModal();
 }
 
 function saveExerciseDialog() {
   const name = L.cleanName($('#d-name').value);
-  if (!name) {
-    $('#exercise-dialog-error').textContent = 'Please enter a name.';
+  const target = L.parseTarget($('#d-target').value);
+  const error = name ? validateTarget(target) : 'Please enter a name.';
+  if (error) {
+    $('#exercise-dialog-error').textContent = error;
     return;
   }
-  state.draft.exercises[editing.exIndex].name = name;
+  L.updateExercise(state.draft, editing.exIndex, { name, target, note: $('#d-note').value });
   saveDraftNow();
   $('#exercise-dialog').close();
   renderExerciseList();

@@ -80,6 +80,22 @@ test('parseRest accepts seconds and mm:ss (also mm.ss / mm,ss)', () => {
   assert(Number.isNaN(L.parseRest('abc')), 'letters are invalid');
 });
 
+test('parseTarget reads rep ranges, also typed on the number pad', () => {
+  assertEqual(L.parseTarget('8-12'), { min: 8, max: 12 });
+  assertEqual(L.parseTarget('8–12'), { min: 8, max: 12 });
+  assertEqual(L.parseTarget('8.12'), { min: 8, max: 12 });
+  assertEqual(L.parseTarget('8,12'), { min: 8, max: 12 });
+  assertEqual(L.parseTarget(' 8 12 '), { min: 8, max: 12 });
+  assertEqual(L.parseTarget('5'), { min: 5, max: 5 });
+  assertEqual(L.parseTarget(''), null);
+  assert(Number.isNaN(L.parseTarget('12-8')), 'max below min is invalid');
+  assert(Number.isNaN(L.parseTarget('0')), '0 reps is invalid');
+  assert(Number.isNaN(L.parseTarget('abc')), 'letters are invalid');
+  assertEqual(L.formatTarget({ min: 8, max: 12 }), '8–12');
+  assertEqual(L.formatTarget({ min: 5, max: 5 }), '5');
+  assertEqual(L.formatTarget(null), '');
+});
+
 test('formatting weight, rest and sets', () => {
   assertEqual(L.formatWeight(22.5), '22.5');
   assertEqual(L.formatWeight(20), '20');
@@ -140,6 +156,43 @@ test('editing and removing sets and exercises', () => {
   assertEqual(s.exercises, []);
 });
 
+test('target rep range and note are saved on the exercise', () => {
+  const s = L.newSession(NOW);
+  const set = { weight: 60, reps: 8, rest: 90 };
+  L.addSet(s, 'Bench Press', set, { target: { min: 8, max: 12 }, note: '  Felt heavy ' });
+  assertEqual(s.exercises[0].target, { min: 8, max: 12 });
+  assertEqual(s.exercises[0].note, 'Felt heavy');
+
+  L.addSet(s, 'Bench Press', set, { target: null, note: '' });
+  assertEqual(s.exercises[0].note, 'Felt heavy', 'an empty note field keeps the note');
+  assertEqual(s.exercises[0].target, { min: 8, max: 12 }, 'an empty target field keeps the target');
+
+  L.addSet(s, 'Bench Press', set, { note: 'Left shoulder' });
+  assertEqual(s.exercises[0].note, 'Left shoulder', 'a new note replaces the old one');
+
+  L.updateExercise(s, 0, { name: ' Incline  Bench ', target: { min: 6, max: 6 }, note: '' });
+  assertEqual(s.exercises[0].name, 'Incline Bench');
+  assertEqual(s.exercises[0].target, { min: 6, max: 6 });
+  assertEqual(s.exercises[0].note, undefined, 'clearing the note in Edit removes it');
+  L.updateExercise(s, 0, { name: 'Incline Bench', target: null, note: '' });
+  assertEqual(s.exercises[0].target, undefined, 'clearing the target in Edit removes it');
+});
+
+test('during a workout the exercise worked on last is shown first', () => {
+  const s = L.newSession(NOW);
+  const set = { weight: 50, reps: 10, rest: 60 };
+  L.addSet(s, 'Squat', set);
+  L.addSet(s, 'Bench Press', set);
+  L.addSet(s, 'Row', set);
+  const order = () => L.exercisesNewestFirst(s).map(({ ex }) => ex.name);
+  assertEqual(order(), ['Row', 'Bench Press', 'Squat'], 'newest exercise on top');
+
+  L.addSet(s, 'Squat', set);
+  assertEqual(order(), ['Squat', 'Row', 'Bench Press'], 'an older exercise jumps back to the top');
+  assertEqual(L.exercisesNewestFirst(s)[0].exIndex, 0, 'exIndex still points at the real exercise');
+  assertEqual(s.exercises.map((e) => e.name), ['Squat', 'Bench Press', 'Row'], 'stored order = order started');
+});
+
 test('prepareForSave drops empty exercises and the half-typed form', () => {
   const draft = L.newSession(NOW);
   assertEqual(L.prepareForSave(draft, NOW), null, 'nothing to save');
@@ -153,6 +206,24 @@ test('prepareForSave drops empty exercises and the half-typed form', () => {
     id: draft.id, startedAt: NOW, finishedAt: NOW + 1000,
     exercises: [{ name: 'Squat', sets: [{ weight: 100, reps: 5, rest: 120 }] }],
   });
+});
+
+test('saved sessions keep target, note and the order exercises were done in', () => {
+  const draft = L.newSession(NOW);
+  const set = { weight: 50, reps: 10, rest: 60 };
+  L.addSet(draft, 'Squat', set, { target: { min: 5, max: 5 } });
+  L.addSet(draft, 'Bench Press', set, { target: { min: 8, max: 12 }, note: 'Felt heavy' });
+  L.addSet(draft, 'Squat', set); // Squat jumped to the top during the workout…
+
+  const saved = L.prepareForSave(draft, NOW + 1000);
+  assertEqual(saved.exercises.map((e) => e.name), ['Squat', 'Bench Press'], '…but is saved first, as done first');
+  assertEqual(saved.exercises[0].target, { min: 5, max: 5 });
+  assertEqual(saved.exercises[1], {
+    name: 'Bench Press', target: { min: 8, max: 12 }, note: 'Felt heavy', sets: [set],
+  }, 'no internal "lastActive" field is saved');
+
+  const index = L.buildExerciseIndex([saved]);
+  assertEqual(index.find((e) => e.name === 'Bench Press').target, { min: 8, max: 12 }, 'target is suggested next time');
 });
 
 test('exercise suggestions: most recent first, prefix matches first', () => {

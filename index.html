@@ -78,12 +78,18 @@
 
     <main class="content">
       <form class="card entry" id="entry-form" autocomplete="off" novalidate>
-        <label class="field">
-          <span>Exercise</span>
-          <input id="f-name" name="name" type="text" autocapitalize="words"
-                 autocorrect="off" spellcheck="false" enterkeyhint="next"
-                 placeholder="e.g. Bench Press">
-        </label>
+        <div class="row-name">
+          <label class="field">
+            <span>Exercise</span>
+            <input id="f-name" name="name" type="text" autocapitalize="words"
+                   autocorrect="off" spellcheck="false" enterkeyhint="next"
+                   placeholder="e.g. Bench Press">
+          </label>
+          <label class="field">
+            <span>Target reps</span>
+            <input id="f-target" name="target" type="text" inputmode="decimal" placeholder="8.12" enterkeyhint="next">
+          </label>
+        </div>
         <div class="chips" id="name-suggestions" aria-label="Exercise suggestions"></div>
         <p class="hint" id="last-time"></p>
 
@@ -108,6 +114,12 @@
           <button class="chip" type="button" data-rest="120">2:00</button>
           <button class="chip" type="button" data-rest="180">3:00</button>
         </div>
+
+        <label class="field field-note">
+          <span>Note</span>
+          <input id="f-note" name="note" type="text" autocapitalize="sentences"
+                 enterkeyhint="done" placeholder="Optional, e.g. felt heavy">
+        </label>
 
         <p class="error" id="entry-error" role="alert"></p>
         <button class="btn btn-primary" id="add-set-btn" type="submit">Add Set</button>
@@ -174,7 +186,11 @@
   <dialog class="sheet sheet-top" id="exercise-dialog">
     <form method="dialog" novalidate>
       <h2 tabindex="-1" autofocus>Edit exercise</h2>
-      <label class="field"><span>Name</span><input id="d-name" type="text" autocapitalize="words" autocorrect="off"></label>
+      <div class="row-name">
+        <label class="field"><span>Name</span><input id="d-name" type="text" autocapitalize="words" autocorrect="off"></label>
+        <label class="field"><span>Target reps</span><input id="d-target" type="text" inputmode="decimal" placeholder="8.12"></label>
+      </div>
+      <label class="field"><span>Note</span><input id="d-note" type="text" autocapitalize="sentences" placeholder="Optional"></label>
       <p class="error" id="exercise-dialog-error" role="alert"></p>
       <div class="dialog-actions">
         <button class="btn btn-danger-outline" type="button" id="exercise-delete-btn">Delete exercise</button>

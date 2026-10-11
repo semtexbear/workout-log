@@ -274,6 +274,16 @@ input::placeholder { color: var(--muted); opacity: 0.55; }
   margin-top: 12px;
 }
 
+/* Exercise name (wide) next to Target reps (narrow). */
+.row-name {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+}
+
+.field-note { margin-top: 12px; }
+.field-note input { font-size: 17px; }
+
 .btn {
   display: block;
   width: 100%;
@@ -349,6 +359,35 @@ input::placeholder { color: var(--muted); opacity: 0.55; }
   border-bottom: 1.5px solid var(--ink);
 }
 .exercise-head h3 { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+
+.exercise-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+/* "TARGET 8–12" label next to the exercise name. */
+.target {
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.exercise-note {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 15px;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
 
 .small-btn {
   flex: none;
