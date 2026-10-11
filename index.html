@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover lets the app draw behind the notch; the CSS adds
+       safe-area padding so nothing important ends up hidden. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Workout Log</title>
+
+  <!-- iPhone "Add to Home Screen" settings -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <!-- "default" = iOS's standard light status bar with dark text. It blends with
+       the paper-coloured top bar (iOS 26 adds a light glow at the top of web apps). -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Workouts">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4f3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+
+  <!-- =========================== HOME =========================== -->
+  <section class="screen" id="screen-home">
+    <!-- Quiet (empty) top bar, same as on the other screens. -->
+    <header class="bar bar-collapsing">
+      <span></span>
+      <div class="bar-title"></div>
+      <span></span>
+    </header>
+    <div class="home-header">
+      <h1 class="home-date" id="home-date"></h1>
+      <p class="motto">You vs You</p>
+    </div>
+
+    <div class="home-body">
+      <div class="tiles">
+        <button class="tile tile-new" id="tile-new" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span>
+            <span class="tile-label" id="tile-new-label">New Session</span>
+            <span class="tile-sub" id="tile-new-sub">Start logging</span>
+          </span>
+        </button>
+        <button class="tile tile-past" id="tile-past" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <span>
+            <span class="tile-label">Past Sessions</span>
+            <span class="tile-sub" id="tile-past-sub"></span>
+          </span>
+        </button>
+      </div>
+
+      <div class="home-links">
+        <button class="link-btn" id="export-btn" type="button">Export data (JSON)</button>
+        <button class="link-btn" id="import-btn" type="button">Import backup</button>
+        <input type="file" id="import-file" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== SESSION IN PROGRESS ====================== -->
+  <section class="screen" id="screen-session" hidden>
+    <header class="bar">
+      <button class="bar-btn" type="button" data-go="#/">‹ Home</button>
+      <div class="bar-title">
+        Session
+        <small id="session-date"></small>
+      </div>
+      <button class="bar-btn bar-btn-right" id="discard-btn" type="button">Discard</button>
+    </header>
+
+    <main class="content">
+      <form class="card entry" id="entry-form" autocomplete="off" novalidate>
+        <label class="field">
+          <span>Exercise</span>
+          <input id="f-name" name="name" type="text" autocapitalize="words"
+                 autocorrect="off" spellcheck="false" enterkeyhint="next"
+                 placeholder="e.g. Bench Press">
+        </label>
+        <div class="chips" id="name-suggestions" aria-label="Exercise suggestions"></div>
+        <p class="hint" id="last-time"></p>
+
+        <div class="row3">
+          <label class="field">
+            <span>Weight kg</span>
+            <input id="f-weight" name="weight" type="text" inputmode="decimal" placeholder="0" enterkeyhint="next">
+          </label>
+          <label class="field">
+            <span>Reps</span>
+            <input id="f-reps" name="reps" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="8" enterkeyhint="next">
+          </label>
+          <label class="field">
+            <span>Rest</span>
+            <input id="f-rest" name="rest" type="text" inputmode="decimal" placeholder="1.30" enterkeyhint="done">
+          </label>
+        </div>
+        <div class="chips rest-chips" aria-label="Quick rest times">
+          <span class="chips-label">Rest</span>
+          <button class="chip" type="button" data-rest="60">1:00</button>
+          <button class="chip" type="button" data-rest="90">1:30</button>
+          <button class="chip" type="button" data-rest="120">2:00</button>
+          <button class="chip" type="button" data-rest="180">3:00</button>
+        </div>
+
+        <p class="error" id="entry-error" role="alert"></p>
+        <button class="btn btn-primary" id="add-set-btn" type="submit">Add Set</button>
+      </form>
+
+      <div id="exercise-list"></div>
+    </main>
+
+    <footer class="bottom-bar">
+      <button class="btn btn-finish" id="finish-btn" type="button">Finish &amp; Save Session</button>
+    </footer>
+  </section>
+
+  <!-- ========================= PAST SESSIONS ========================= -->
+  <section class="screen" id="screen-history" hidden>
+    <header class="bar bar-collapsing">
+      <button class="bar-btn" type="button" data-go="#/">‹ Home</button>
+      <div class="bar-title">Past Sessions</div>
+      <span></span>
+    </header>
+    <main class="content">
+      <h1 class="large-title">Past Sessions</h1>
+      <div id="history-list"></div>
+      <p class="footnote">Sessions older than 12 months are deleted automatically.</p>
+    </main>
+  </section>
+
+  <!-- ======================== SESSION DETAILS ======================== -->
+  <section class="screen" id="screen-detail" hidden>
+    <header class="bar bar-collapsing">
+      <button class="bar-btn" type="button" data-go="#/history">‹ Back</button>
+      <div class="bar-title" id="detail-bar-title">Session</div>
+      <span></span>
+    </header>
+    <main class="content">
+      <h1 class="large-title detail-date" id="detail-date"></h1>
+      <p class="detail-meta" id="detail-meta"></p>
+      <div id="detail-list"></div>
+      <button class="btn btn-danger-outline" id="delete-session-btn" type="button">Delete Session</button>
+    </main>
+  </section>
+
+  <!-- =========================== DIALOGS =========================== -->
+
+  <!-- Edit one set. Shown near the top so the keyboard never covers it. -->
+  <dialog class="sheet sheet-top" id="set-dialog">
+    <form method="dialog" novalidate>
+      <h2 tabindex="-1" autofocus id="set-dialog-title">Edit set</h2>
+      <div class="row3">
+        <label class="field"><span>Weight kg</span><input id="d-weight" type="text" inputmode="decimal"></label>
+        <label class="field"><span>Reps</span><input id="d-reps" type="text" inputmode="numeric" pattern="[0-9]*"></label>
+        <label class="field"><span>Rest</span><input id="d-rest" type="text" inputmode="decimal"></label>
+      </div>
+      <p class="error" id="set-dialog-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="btn btn-danger-outline" type="button" id="set-delete-btn">Delete set</button>
+        <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="button" id="set-save-btn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Rename or delete an exercise. -->
+  <dialog class="sheet sheet-top" id="exercise-dialog">
+    <form method="dialog" novalidate>
+      <h2 tabindex="-1" autofocus>Edit exercise</h2>
+      <label class="field"><span>Name</span><input id="d-name" type="text" autocapitalize="words" autocorrect="off"></label>
+      <p class="error" id="exercise-dialog-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="btn btn-danger-outline" type="button" id="exercise-delete-btn">Delete exercise</button>
+        <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="button" id="exercise-save-btn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Generic "Are you sure?" prompt. Shown at the bottom, within thumb reach. -->
+  <dialog class="sheet sheet-bottom" id="confirm-dialog">
+    <form method="dialog">
+      <h2 tabindex="-1" autofocus id="confirm-title"></h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions dialog-actions-2">
+        <button class="btn btn-secondary" value="cancel">Cancel</button>
+        <button class="btn btn-danger" value="ok" id="confirm-ok"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
