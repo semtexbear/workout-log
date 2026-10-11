@@ -148,13 +148,14 @@ h1, h2, h3 { margin: 0; letter-spacing: -0.02em; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-/* "You vs You" underneath: small and quiet, with a thin line below. */
+/* "YOU VS YOU" underneath: wide-spaced ink capitals with an ink rule below. */
 .motto {
   margin: 10px 0 0;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--hairline);
-  color: var(--muted);
-  font-size: 15px;
+  border-bottom: 1.5px solid var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
 }
 
 .home-body {
